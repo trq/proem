@@ -1,0 +1,25 @@
+{
+  "name": "proem/proem",
+  "description": "A lightweight, simple, fast MVC implementation for PHP5.4",
+  "homepage": "http://proemframework.org",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Tony R Quilkey",
+      "email": "trq@proemframework.org",
+      "homepage": "http://thorpesystems.com"
+    }
+  ],
+  "branches": {
+    "master": [
+      {
+        "app" : "proem-bench-master"
+      }
+    ],
+    "develop": [
+      {
+        "app" : "proem-bench-develop"
+      }
+    ]
+  }
+}
