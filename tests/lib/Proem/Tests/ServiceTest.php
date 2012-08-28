@@ -26,8 +26,8 @@
 
 namespace Proem\Tests;
 
-use Proem\Service\Asset\Generic as Asset,
-    Proem\Service\Manager,
+use Proem\Service\Asset\Standard as Asset,
+    Proem\Service\Manager\Standard as Manager,
     Proem\Service\Asset\Foo,
     Proem\Service\Asset\Bar;
 
@@ -36,45 +36,41 @@ class ServiceTest extends \PHPUnit_Framework_TestCase
     public function testCanInstantiateAsset()
     {
         $a = new Asset;
-        $this->assertInstanceOf('Proem\Service\Asset\Generic', $a);
+        $this->assertInstanceOf('Proem\Service\Asset\Template', $a);
     }
 
     public function testCanInstantiateAssetManager()
     {
         $am = new Manager;
-        $this->assertInstanceOf('Proem\Service\Manager', $am);
+        $this->assertInstanceOf('Proem\Service\Manager\Template', $am);
     }
 
     public function testAssetCanInstantiate()
     {
         $bar = new Asset;
-        $bar->set(function() {
+        $bar->set('Proem\Service\Asset\Bar', function() {
             return new Bar;
         });
 
-        $this->assertInstanceOf('Proem\Service\Asset\Bar', $bar->get());
+        $this->assertInstanceOf('Proem\Service\Asset\Template', $bar());
     }
 
     public function testAssetCanSetParams()
     {
         $foo = new Asset;
         $foo->setParam('name', 'trq')
-            ->set(function($a) {
+            ->set('\Proem\Service\Asset\Foo', function($a) {
                 return new Foo($a->getParam('name'));
             });
 
-        $asset = $foo->get();
-
-        $this->assertEquals('Hello trq', $asset->say());
+        $this->assertEquals('Hello trq', $foo()->say());
     }
 
     public function testMagicGetSetParams()
     {
         $foo = new Asset;
         $foo->name = 'trq';
-        $foo->set(function($a) {
-            $this->assertEquals('trq', $a->name);
-        });
+        $this->assertEquals('trq', $foo->name);
     }
 
     public function testAssetCanSetMultipleParams()
@@ -83,127 +79,136 @@ class ServiceTest extends \PHPUnit_Framework_TestCase
         $foo->setParams([
             'foo' => 'bar',
             'boo' => 'bob'
-        ])->set(function($a) {
-            $this->assertEquals('bar', $a->getParam('foo'));
-            $this->assertEquals('bob', $a->getParam('boo'));
-        });
-
+        ]);
+        $this->assertEquals('bar', $foo->getParam('foo'));
+        $this->assertEquals('bob', $foo->getParam('boo'));
     }
 
     public function testReturnsDifferentInstance()
     {
         $bar = new Asset;
-        $bar->set(function() {
+        $bar->set('Proem\Service\Asset\Bar', function() {
             return new Bar;
         });
 
-        $one = $bar->get();
-        $this->assertInstanceOf('Proem\Service\Asset\Bar', $one);
-
-        $two = $bar->get();
-        $this->assertInstanceOf('Proem\Service\Asset\Bar', $two);
-
-        $this->assertNotSame($one, $two);
+        $this->assertNotSame($bar(), $bar());
 
     }
 
     public function testSingleReturnsSameInstance()
     {
         $bar = new Asset;
-        $bar->set($bar->single(function() {
+        $bar->set('Proem\Service\Asset\Bar', $bar->single(function() {
             return new Bar;
         }));
 
-        $one = $bar->get();
-        $this->assertInstanceOf('Proem\Service\Asset\Bar', $one);
-
-        $two = $bar->get();
-        $this->assertInstanceOf('Proem\Service\Asset\Bar', $two);
-
-        $this->assertSame($one, $two);
+        $this->assertSame($bar(), $bar());
 
     }
 
     public function testAssetManagerCanStoreAndRetrieve()
     {
         $bar = new Asset;
-        $bar->provides('Bar')->set(function() {
+        $bar->set('Proem\Service\Asset\Bar', function() {
             return new Bar;
         });
 
         $am = new Manager;
         $am->set('bar', $bar);
 
-        $this->assertInstanceOf('Proem\Service\Asset\Bar', $am->get('bar'));
+        $this->assertInstanceOf('Proem\Service\Asset\Template', $am->get('bar'));
     }
 
     public function testAssetProvides()
     {
         $bar = new Asset;
-        $bar->provides('foo');
-        $this->assertEquals('foo', $bar->provides());
+        $bar->set('Proem\Service\Asset\Bar', function() {
+            return new Bar;
+        });
+        $this->assertEquals('Proem\Service\Asset\Bar', $bar->provides());
     }
 
     public function testManagerProvides()
     {
         $bar = new Asset;
-        $bar->provides('foo');
+        $bar->set('Proem\Service\Asset\Bar', function() {
+            return new Bar;
+        });
 
         $am = new Manager;
         $am->set('bar', $bar);
-        $this->assertTrue($am->provides('foo'));
+        $this->assertTrue($am->provides('Proem\Service\Asset\Bar'));
+        $this->assertTrue($am->provides('bar', 'Proem\Service\Asset\Bar'));
     }
 
     public function testRetrieveByProvides()
     {
         $bar = new Asset;
-        $bar->provides('Bar')->set(function() {
+        $bar->set('Proem\Service\Asset\Bar', function() {
             return new Bar;
         });
 
         $foo = new Asset;
-        $foo->provides('Foo')->set(function() {
+        $foo->set('Proem\Service\Asset\Foo', function() {
             return new Foo;
         });
 
         $am = new Manager;
         $am->set('bar', $bar)->set('foo', $foo);
 
-        $this->assertInstanceOf('Proem\Service\Asset\Bar', $am->getProvided('Bar'));
+        $this->assertInstanceOf('Proem\Service\Asset\Template', $am->getProvided('Proem\Service\Asset\Bar'));
     }
 
     public function testCanGetDepsThroughManager()
     {
         $bar = new Asset;
-        $bar->provides('Bar')->set(function() {
+        $bar->set('Proem\Service\Asset\Bar', function() {
             return new Bar;
         });
 
         $foo = new Asset;
-        $foo->provides('Foo')->set(function($a, $am) {
+        $foo->set('Proem\Service\Asset\Foo', function($a, $am) {
             $f = new Foo('something');
-            $f->setBar($am->get('bar'));
+            $f->setBar($am->bar);
             return $f;
         });
 
         $am = new Manager;
         $am->set('foo', $foo)->set('bar', $bar);
 
-        $this->assertInstanceOf('Proem\Service\Asset\Bar', $am->get('bar'));
-        $this->assertInstanceOf('Proem\Service\Asset\Foo', $am->get('foo'));
-        $this->assertInstanceOf('Proem\Service\Asset\Bar', $am->get('foo')->getBar());
+        $this->assertInstanceOf('Proem\Service\Asset\Template', $am->bar);
+        $this->assertInstanceOf('Proem\Service\Asset\Template', $am->foo);
+        $this->assertInstanceOf('Proem\Service\Asset\Template', $am->foo->getBar());
     }
 
     public function testManagerHas()
     {
         $bar = new Asset;
-        $bar->provides('Bar')->set(function() {
+        $bar->set('Proem\Service\Asset\Bar', function() {
             return new Bar;
         });
 
         $am = new Manager;
-        $am->set('bar', $bar);
+        $am->bar = $bar;
 
         $this->assertTrue($am->has('bar'));
+    }
+
+    public function testManagerHasMultiple()
+    {
+        $bar = new Asset;
+        $bar->set('Proem\Service\Asset\Bar', function() {
+            return new Bar;
+        });
+
+        $foo = new Asset;
+        $foo->set('Proem\Service\Asset\Foo', function() {
+            return new Foo();
+        });
+
+        $am = new Manager;
+        $am->set('Foo', $foo)->set('Bar', $bar);
+
+        $this->assertTrue($am->provides(['Proem\Service\Asset\Foo', 'Proem\Service\Asset\Bar']));
     }
 }

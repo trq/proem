@@ -35,10 +35,27 @@ class ProemTest extends \PHPUnit_Framework_TestCase
         $this->assertInstanceOf('Proem\Proem', new Proem);
     }
 
-    public function testCascadingFilesystem()
+    /**
+     * This test injects a Foo object into the main service manager
+     * via a plugin (\Proem\Ext\Plugin\Foo - Found in Fixtures) which
+     * attaches on the pre.in.dispatch event. It then uses an event
+     * to test to see of that object has indeed been injected properly.
+     */
+    public function testCanLoadExtensions()
     {
-        $proem = new Proem;
-        $this->assertTrue($proem->somethingNew());
+        $r          = new \StdClass;
+        $r->result  = false;
+        $proem      = new Proem;
+        $proem
+            ->attachEventListener('proem.post.in.dispatch', function($e) use ($r) {
+                if ($e->getServiceManager()->has('foo')) {
+                    $r->result = true;
+                }
+            })
+            ->attachPlugin(new \Proem\Ext\Plugin\Foo)
+            ->init();
+
+        $this->assertTrue($r->result);
     }
 
     public function testBootstrap()
@@ -46,81 +63,46 @@ class ProemTest extends \PHPUnit_Framework_TestCase
         $results            = new \StdClass;
         $results->triggered = 0;
         $results->event     = false;
-        $results->target    = false;
-        $results->method    = false;
         $results->init      = false;
         $results->shutdown  = false;
 
         (new Proem)
-            ->attachEventListener([
-                'name'      => 'pre.in.response',
-                'callback'  => function($e) use ($results) {
-                    $results->event = $e;
-                    $results->target = $e->getTarget();
-                    $results->method = $e->getMethod();
-                    $results->triggered++;
-                }
-            ])
-            ->attachEventListener([
-                'name'      => 'post.in.response',
-                'callback'  => function($e) use ($results) {
-                    $results->triggered++;
-                }
-            ])
-            ->attachEventListener([
-                'name'      => 'pre.in.request',
-                'callback'  => function($e) use ($results) {
-                    $results->triggered++;
-                }
-            ])
-            ->attachEventListener([
-                'name'      => 'post.in.request',
-                'callback'  => function($e) use ($results) {
-                    $results->triggered++;
-                }
-            ])
-            ->attachEventListener([
-                'name'      => 'pre.in.route',
-                'callback'  => function($e) use ($results) {
-                    $results->triggered++;
-                }
-            ])
-            ->attachEventListener([
-                'name'      => 'post.in.route',
-                'callback'  => function($e) use ($results) {
-                    $results->triggered++;
-                }
-            ])
-            ->attachEventListener([
-                'name'      => 'pre.in.dispatch',
-                'callback'  => function($e) use ($results) {
-                    $results->triggered++;
-                }
-            ])
-            ->attachEventListener([
-                'name'      => 'post.in.dispatch',
-                'callback'  => function($e) use ($results) {
-                    $results->triggered++;
-                }
-            ])->attachEventListeners([
+            ->attachEventListener('proem.pre.in.response', function($e) use ($results) {
+                $results->event = $e;
+                $results->triggered++;
+            })
+            ->attachEventListener('proem.post.in.response', function($e) use ($results) {
+                $results->triggered++;
+            })
+            ->attachEventListener('proem.pre.in.request', function($e) use ($results) {
+                $results->triggered++;
+            })
+            ->attachEventListener('proem.post.in.request', function($e) use ($results) {
+                $results->triggered++;
+            })
+            ->attachEventListener('proem.pre.in.router', function($e) use ($results) {
+                $results->triggered++;
+            })
+            ->attachEventListener('proem.post.in.router', function($e) use ($results) {
+                $results->triggered++;
+            })
+            ->attachEventListener('proem.pre.in.dispatch', function($e) use ($results) {
+                $results->triggered++;
+            })
+            ->attachEventListener('proem.post.in.dispatch', function($e) use ($results) {
+                $results->triggered++;
+            })->attachEventListeners([
                 [
-                    'name'      => 'init',
+                    'name'      => 'proem.init',
                     'callback'  => function($e) use ($results) {
                         $results->init = true;
                     }
                 ],
-                [
-                    'name'      => 'shutdown',
-                    'callback'  => function($e) use ($results) {
-                        $results->shutdown = true;
-                    }
-                ]
             ])
         ->init();
 
         $this->assertEquals(8, $results->triggered);
         $this->assertInstanceOf('Proem\Bootstrap\Signal\Event\Bootstrap', $results->event);
-        $this->assertInstanceOf('Proem\Api\Bootstrap\Filter\Event\Response', $results->target);
-        $this->assertEquals('preIn', $results->method);
+        $this->assertTrue($results->init);
     }
 }

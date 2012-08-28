@@ -1,1 +1,4 @@
+build
 tests/log/*
+tests/coverage
+vendor

@@ -30,23 +30,62 @@
 namespace Proem;
 
 /**
- * Proem\Autoloader
+ * The Proem Autoloader
+ *
+ * An autoloader implementing the PSR-0 standard
+ *
+ * @link https://github.com/php-fig/fig-standards/blob/master/accepted/PSR-0.md
  */
 class Autoloader
 {
-    private $namespaces     = [];
-    private $pearPrefixes   = [];
+    /**
+     * Flag wether or not to attach the Proem namespace.
+     */
+    protected $loadProem;
 
     /**
-     * Register an array of namespaces.
+     * Store namespaces
+     *
+     * @var array $namespaces
+     */
+    protected $namespaces = [];
+
+    /**
+     * Store Pear prefixes
+     *
+     * @var array $pearPrefixes
+     */
+    protected $pearPrefixes = [];
+
+    /**
+     * Store a flag indicating the abilty to load the APC extension
+     */
+    protected $apcEnabled = false;
+
+    /**
+     * Instantiate our Autoloader and check for APC.
+     */
+    public function __construct($loadProem = true)
+    {
+        if (extension_loaded('apc')) {
+            $this->apcEnabled = true;
+        }
+
+        if ($loadProem) {
+            $this->attachNamespace('Proem', realpath(__DIR__) . '/..');
+        }
+    }
+
+    /**
+     * Register an array of namespaces
      *
      * @param array $namespaces An array of namespaces
-     * @return Proem\Api\Autoloader
+     * @return Proem\Autoloader
      */
-    public function registerNamespaces(array $namespaces)
+    public function attachNamespaces(array $namespaces)
     {
         foreach ($namespaces as $namespace => $paths) {
-            $this->registerNamespace($namespace, $paths);
+            $this->attachNamespace($namespace, $paths);
         }
         return $this;
     }
@@ -54,38 +93,47 @@ class Autoloader
     /**
      * Register a namespace.
      *
-     * @param string       $namespace The namespace
-     * @param array|string $paths     The path to the namespace
-     * @return Proem\Api\Autoloader
+     * @param string $namespace The namespace
+     * @param array|string $paths The path to the namespace
+     * @return Proem\Autoloader
      */
-    public function registerNamespace($namespace, $paths)
+    public function attachNamespace($namespace, $paths)
     {
-        $this->namespaces[$namespace] = (array) $paths;
+        if (isset($this->namespaces[$namespace])) {
+            if (is_array($paths)) {
+                $this->namespaces[$namespace] = array_merge($this->namespaces[$namespace], $paths);
+            } else {
+                $this->namespaces[$namespace][] = $paths;
+            }
+        } else {
+            $this->namespaces[$namespace] = (array) $paths;
+        }
+
         return $this;
     }
 
     /**
-     * Registers an array of classes using the Pear coding standard.
+     * Registers an array of classes using the Pear naming convention
      *
      * @param array $classes
-     * @return Proem\Api\Autoloader
+     * @return Proem\Autoloader
      */
-    public function registerPearPrefixes(array $classes)
+    public function attachPearPrefixes(array $classes)
     {
         foreach ($classes as $prefix => $paths) {
-            $this->registerPearPrefix($prefix, $paths);
+            $this->attachPearPrefix($prefix, $paths);
         }
         return $this;
     }
 
     /**
-     * Register a class using the PEAR naming convention.
+     * Register a class using the PEAR naming convention
      *
-     * @param string       $prefix  The prefix
-     * @param array|string $paths   The path
-     * @return Proem\Api\Autoloader
+     * @param string $prefix The prefix
+     * @param array|string $paths The path
+     * @return Proem\Autoloader
      */
-    public function registerPearPrefix($prefix, $paths)
+    public function attachPearPrefix($prefix, $paths)
     {
         $this->pearPrefixes[$prefix] = (array) $paths;
         return $this;
@@ -93,6 +141,8 @@ class Autoloader
 
     /**
      * Register the autoloader.
+     *
+     * @return Proem\Autoloader
      */
     public function register()
     {
@@ -101,9 +151,28 @@ class Autoloader
     }
 
     /**
-     * Load a class.
+     * Unregister the autoloader.
      *
-     * @param string $class The name of the class
+     * @return Proem\Autoloader
+     */
+    public function unregister()
+    {
+        spl_autoload_unregister([$this, 'load']);
+        return $this;
+    }
+
+    /**
+     * Load a class
+     *
+     * This load mechanism is not only responsible for locating and including the
+     * file where a class is defined, but is also responsible for implementing Proem's
+     * cascading file system. This is achieved by suffixing \Api onto the Proem part
+     * of any namespace starting with Proem, including the class from within the Proem
+     * namespace, and then aliasing that class back to Proem (without the \Api suffix)
+     *
+     * @link http://proemframework.org/docs/cascading-namespace.html
+     * @param string $class The absolute (including namespace) name of the class
+     * @return Proem\Autoloader
      */
     public function load($class)
     {
@@ -112,27 +181,39 @@ class Autoloader
         }
 
         if ($file = $this->locate($class)) {
-            include_once $file;
-        } else {
-            if (substr($class, 0, 5) == 'Proem') {
-                $api_class = str_replace('Proem\\', 'Proem\\Api\\', $class);
-                if ($file = $this->locate($api_class)) {
-                    include_once $file;
-                    class_alias($api_class, $class);
-                }
-            }
+            include $file;
         }
+
         return $this;
+    }
+
+    /**
+     * A simple wrapper around locateFile() that first
+     * checks to see if we are using APC caching.
+     *
+     * @param string $class The name of the class
+     * @return string|null The path, if found
+     */
+    private function locate($class)
+    {
+        if ($this->apcEnabled && !$file = apc_fetch($class)) {
+            if ($file = $this->locateFile($class)) {
+                apc_store($class, $file);
+            }
+        } else if (!$this->apcEnabled) {
+            $file = $this->locateFile($class);
+        }
+
+        return $file;
     }
 
     /**
      * Locate the path to the file where $class is defined.
      *
      * @param string $class The name of the class
-     *
      * @return string|null The path, if found
      */
-    private function locate($class)
+    private function locateFile($class)
     {
         if (false !== $pos = strrpos($class, '\\')) {
             $namespace = substr($class, 0, $pos);
