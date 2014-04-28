@@ -1,2 +1,2 @@
-image: bradrydzewski/php:5.4
+image: php:5.4
 script: ./vendor/bin/phake dev:tests
