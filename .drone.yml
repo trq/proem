@@ -1,4 +1,4 @@
-image: php54
+image: trq/php54:0.1
 script:
-    - curl -s http://getcomposer.org/installer | php -- && php composer.phar install --dev
+    - composer install --dev
     - php vendor/bin/phake dev:tests
