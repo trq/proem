@@ -1,4 +1,4 @@
-image: trq/php54:0.1
+image: thorpesystems/php54:0.1
 script:
     - composer install --dev
     - php vendor/bin/phake dev:tests
