@@ -1,2 +1,4 @@
-image: php:5.4
-script: ./vendor/bin/phake dev:tests
+image: php54
+script:
+    - curl -s http://getcomposer.org/installer | php -- && php composer.phar install --dev
+    - php vendor/bin/phake dev:tests
